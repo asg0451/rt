@@ -1,18 +1,31 @@
 // (lsp-rust-analyzer-inlay-hints-mode -1)
 
+mod camera;
 mod hittable;
 mod ray;
 mod vec3;
 
+use camera::Camera;
 use hittable::{Hittable, HittableList, Sphere};
 use ray::Ray;
 use vec3::*;
 
-fn print_color(c: &Color) {
-    let ir = (255.999 * c.x) as i64;
-    let ig = (255.999 * c.y) as i64;
-    let ib = (255.999 * c.z) as i64;
-    println!("{} {} {}", ir, ig, ib);
+fn write_color<W: std::io::Write>(w: &mut W, c: &Color, samples_per_pixel: usize) {
+    let mut r = c.x;
+    let mut g = c.y;
+    let mut b = c.z;
+
+    let scale = 1. / samples_per_pixel as f64;
+    r *= scale;
+    g *= scale;
+    b *= scale;
+    let r = (256. * r.clamp(0., 0.999)) as u64;
+    let g = (256. * g.clamp(0., 0.999)) as u64;
+    let b = (256. * b.clamp(0., 0.999)) as u64;
+
+    w.write_all(format!("{} {} {}\n", r, g, b).as_bytes())
+        .expect("error printing color");
+    // println!("{} {} {}", ir, ig, ib);
 }
 
 // for testing; pretty gradient
@@ -36,6 +49,7 @@ fn main() {
     let aspect_ratio = 16.0 / 9.0;
     let image_width = 400;
     let image_height = (image_width as f64 / aspect_ratio) as i64;
+    let samples_per_pixel = 100;
 
     // world
     use std::rc::Rc;
@@ -43,29 +57,26 @@ fn main() {
         Rc::new(Sphere::new(Point3::new(0., 0., -1.), 0.5)),
         Rc::new(Sphere::new(Point3::new(0., -100.5, -1.), 100.)),
     ]);
-    // camera
-    let viewport_height = 2.0;
-    let viewport_width = aspect_ratio * viewport_height;
-    let focal_length = 1.0;
 
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    let horizontal = Vec3::new(viewport_width, 0., 0.);
-    let vertical = Vec3::new(0., viewport_height, 0.);
-    let lower_left_corner =
-        origin - horizontal / 2.0 - vertical / 2.0 - Vec3::new(0., 0., focal_length);
+    // camera
+    let camera = Camera::new();
+
+    // render
+    use rand::prelude::*;
+    let mut rng = rand::thread_rng();
 
     print!("P3\n{} {}\n255\n", image_width, image_height);
     for j in (0..=(image_height - 1)).rev() {
         eprintln!("\rscanlines remaining: {}", j);
         for i in 0..image_width {
-            let u = i as f64 / (image_width as f64 - 1.0);
-            let v = j as f64 / (image_height as f64 - 1.0);
-            let r = Ray::new(
-                origin,
-                lower_left_corner + u * horizontal + v * vertical - origin,
-            );
-            let color = ray_color(&r, &world);
-            print_color(&color);
+            let mut color = Color::new(0., 0., 0.);
+            for _ in 0..samples_per_pixel {
+                let u = (i as f64 + rng.gen::<f64>()) / (image_width as f64 - 1.0);
+                let v = (j as f64 + rng.gen::<f64>()) / (image_height as f64 - 1.0);
+                let r = camera.get_ray(u, v);
+                color += ray_color(&r, &world);
+            }
+            write_color(&mut std::io::stdout(), &color, samples_per_pixel);
         }
     }
     eprintln!("done")
