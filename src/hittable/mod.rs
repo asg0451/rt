@@ -3,7 +3,7 @@ use crate::ray::Ray;
 use crate::vec3::*;
 
 use nalgebra::Unit;
-use std::rc::Rc;
+use std::sync::Arc;
 
 mod hittable_list;
 mod sphere;
@@ -13,7 +13,7 @@ pub use crate::hittable::sphere::Sphere;
 pub struct HitRecord {
     p: Point3,
     normal: Unit<Vec3>,
-    material: Rc<dyn Material>,
+    material: Arc<dyn Material>,
     t: f64,
     front_face: bool,
 }
@@ -25,7 +25,7 @@ impl HitRecord {
         t: f64,
         r: &Ray,
         mut outward_normal: Unit<Vec3>,
-        material: Rc<dyn Material>,
+        material: Arc<dyn Material>,
     ) -> Self {
         let front_face = r.direction().dot(outward_normal.as_mut_unchecked()) < 0.;
         let normal = if front_face {
@@ -51,11 +51,11 @@ impl HitRecord {
     pub fn p(&self) -> Point3 {
         self.p
     }
-    pub fn material(&self) -> Rc<dyn Material> {
-        Rc::clone(&self.material)
+    pub fn material(&self) -> Arc<dyn Material> {
+        Arc::clone(&self.material)
     }
 }
 
-pub trait Hittable {
+pub trait Hittable: Send + Sync {
     fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
 }

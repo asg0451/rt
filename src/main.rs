@@ -11,6 +11,9 @@ use hittable::{Hittable, HittableList, Sphere};
 use ray::Ray;
 use vec3::{Color, Point3, Vec3};
 
+// https://plasma-umass.org/coz/
+// https://github.com/plasma-umass/coz/tree/master/rust
+
 fn write_color<W: std::io::Write>(w: &mut W, c: &Color, samples_per_pixel: usize) {
     let mut r = c.x;
     let mut g = c.y;
@@ -62,42 +65,46 @@ fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: usize) -> Color {
 }
 
 fn main() {
+    // coz doesnt work now that i have rayon...
+    // TODO: make minimal example and submit issue
+
+    coz::thread_init();
     // eye is at 0,0,0; y is up, x is right, z is into the screen
     // traverse the screen from upper left, use 2 offset vercors along the sides to move the ray endpoint across the screen
 
     // image
     let aspect_ratio = 16.0 / 9.0;
-    let image_width = 400;
+    let image_width = 400; // 3840
     let image_height = (image_width as f64 / aspect_ratio) as i64;
-    let samples_per_pixel = 100;
+    let samples_per_pixel = 100; // 200
     let max_depth = 50; // max ray bounces
 
     // world
-    use std::rc::Rc;
+    use std::sync::Arc;
 
-    let material_ground = Rc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
-    let material_center = Rc::new(material::Lambertian::new(Color::new(0.7, 0.3, 0.3)));
-    let material_left = Rc::new(material::Metal::new(Color::new(0.8, 0.8, 0.8), 0.3));
-    let material_right = Rc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 1.));
+    let material_ground = Arc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
+    let material_center = Arc::new(material::Lambertian::new(Color::new(0.7, 0.3, 0.3)));
+    let material_left = Arc::new(material::Metal::new(Color::new(0.8, 0.8, 0.8), 0.3));
+    let material_right = Arc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 1.));
 
     // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
     let world = HittableList::new(vec![
-        Rc::new(Sphere::new(
+        Arc::new(Sphere::new(
             Point3::new(0.0, -100.5, -1.0),
             100.0,
             material_ground.clone(),
         )),
-        Rc::new(Sphere::new(
+        Arc::new(Sphere::new(
             Point3::new(0.0, 0.0, -1.0),
             0.5,
             material_center.clone(),
         )),
-        Rc::new(Sphere::new(
+        Arc::new(Sphere::new(
             Point3::new(-1.0, 0.0, -1.0),
             0.5,
             material_left.clone(),
         )),
-        Rc::new(Sphere::new(
+        Arc::new(Sphere::new(
             Point3::new(1.0, 0.0, -1.0),
             0.5,
             material_right.clone(),
@@ -109,11 +116,46 @@ fn main() {
 
     // render
     use rand::prelude::*;
-    let mut rng = rand::thread_rng();
 
     print!("P3\n{} {}\n255\n", image_width, image_height);
-    for j in (0..=(image_height - 1)).rev() {
-        eprintln!("\rscanlines remaining: {}", j);
+    let lines = (0..=(image_height - 1)).rev().collect::<Vec<_>>();
+    use rayon::prelude::*;
+
+    let (tx, rx) = std::sync::mpsc::channel::<(i64, Vec<u8>)>();
+
+    let reader_thread = std::thread::spawn(move || {
+        let mut buf: Box<Vec<_>> = Box::new(Vec::with_capacity(
+            image_width as usize * image_height as usize * 10,
+        ));
+        loop {
+            coz::scope!("reading channel");
+            if let Some(res) = rx.recv().ok() {
+                buf.push(res);
+            } else {
+                break;
+            }
+        }
+        buf.sort_unstable_by_key(|&(idx, _)| -idx);
+        coz::begin!("flushing channel");
+        for (_i, l) in buf.into_iter() {
+            print!(
+                "{}",
+                std::str::from_utf8(&l).expect("failed to restringify")
+            );
+        }
+        coz::end!("flushing channel");
+    });
+
+    let ctr = std::sync::atomic::AtomicUsize::new(0);
+
+    lines.par_iter().for_each_with(tx, |tx, &j| {
+        let mut buf = Vec::with_capacity(16);
+        let mut rng = rand::thread_rng();
+        if j % 50 == 0 {
+            let count = ctr.fetch_add(50, std::sync::atomic::Ordering::Relaxed);
+            eprint!("\rscanlines remaining: {}", image_height as usize - count);
+        }
+        coz::begin!("scanline");
         for i in 0..image_width {
             let mut color = Color::new(0., 0., 0.);
             for _ in 0..samples_per_pixel {
@@ -122,8 +164,12 @@ fn main() {
                 let r = camera.get_ray(u, v);
                 color += ray_color(&r, &world, max_depth);
             }
-            write_color(&mut std::io::stdout(), &color, samples_per_pixel);
+            write_color(&mut buf, &color, samples_per_pixel);
         }
-    }
-    eprintln!("done")
+        tx.send((j, buf)).expect("failed to send line");
+        coz::end!("scanline");
+    });
+
+    reader_thread.join().expect("Failed to join reader thread");
+    eprintln!("\ndone");
 }
