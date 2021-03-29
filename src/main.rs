@@ -2,6 +2,7 @@
 
 mod camera;
 mod hittable;
+mod material;
 mod ray;
 mod vec3;
 
@@ -41,9 +42,19 @@ fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: usize) -> Color {
 
     if let Some(rec) = world.hit(r, 0.001, std::f64::INFINITY) {
         // recurse for diffusion / ray bouncing
-        let target =
-            rec.p() + rec.normal().clone().into_inner() + vec3::random_in_hemisphere(&rec.normal());
-        return 0.5 * ray_color(&Ray::new(rec.p(), target - rec.p()), world, depth - 1);
+        if let Some((scattered, attenuation)) = rec.material().scatter(&r, &rec) {
+            let new_color = ray_color(&scattered, world, depth - 1);
+            // should be attenuation * ray_color(&scattered, world, depth - 1);
+            // TODO: why couldn't i just * them? https://docs.rs/nalgebra/0.25.3/nalgebra/base/struct.Matrix.html#method.mul
+            // element-wise multiplication? transpose?
+            let multpld = Vec3::new(
+                new_color.x * attenuation.x,
+                new_color.y * attenuation.y,
+                new_color.z * attenuation.z,
+            );
+            return multpld;
+        }
+        return Color::new(0., 0., 0.);
     }
     let unit_direction = Unit::new_normalize(r.direction());
     let t = 0.5 * (unit_direction.y + 1.0);
@@ -63,9 +74,34 @@ fn main() {
 
     // world
     use std::rc::Rc;
+
+    let material_ground = Rc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
+    let material_center = Rc::new(material::Lambertian::new(Color::new(0.7, 0.3, 0.3)));
+    let material_left = Rc::new(material::Metal::new(Color::new(0.8, 0.8, 0.8), 0.3));
+    let material_right = Rc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 1.));
+
+    // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
     let world = HittableList::new(vec![
-        Rc::new(Sphere::new(Point3::new(0., 0., -1.), 0.5)),
-        Rc::new(Sphere::new(Point3::new(0., -100.5, -1.), 100.)),
+        Rc::new(Sphere::new(
+            Point3::new(0.0, -100.5, -1.0),
+            100.0,
+            material_ground.clone(),
+        )),
+        Rc::new(Sphere::new(
+            Point3::new(0.0, 0.0, -1.0),
+            0.5,
+            material_center.clone(),
+        )),
+        Rc::new(Sphere::new(
+            Point3::new(-1.0, 0.0, -1.0),
+            0.5,
+            material_left.clone(),
+        )),
+        Rc::new(Sphere::new(
+            Point3::new(1.0, 0.0, -1.0),
+            0.5,
+            material_right.clone(),
+        )),
     ]);
 
     // camera

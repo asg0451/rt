@@ -1,4 +1,5 @@
-use nalgebra::{Unit, Vector3};
+pub use nalgebra::Unit;
+use nalgebra::Vector3;
 
 pub type Color = Vector3<f64>;
 pub type Vec3 = Vector3<f64>;
@@ -32,4 +33,14 @@ pub fn random_in_hemisphere(normal: &Unit<Vec3>) -> Vec3 {
     } else {
         -in_unit_sphere
     }
+}
+
+// TODO: newtype wrapper to implement these?
+pub fn near_zero(v: &Vec3) -> bool {
+    let s = 1e-8;
+    v.x < s && v.y < s && v.z < s
+}
+
+pub fn reflect(v: &Vec3, normal: &Unit<Vec3>) -> Vec3 {
+    v - 2. * v.dot(&normal) * normal.as_ref()
 }

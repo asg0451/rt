@@ -1,16 +1,24 @@
 use crate::hittable::{HitRecord, Hittable};
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::*;
+
 use nalgebra::Unit;
+use std::rc::Rc;
 
 pub struct Sphere {
     center: Point3,
     radius: f64,
+    material: Rc<dyn Material>,
 }
 
 impl Sphere {
-    pub fn new(center: Point3, radius: f64) -> Self {
-        Self { center, radius }
+    pub fn new(center: Point3, radius: f64, material: Rc<dyn Material>) -> Self {
+        Self {
+            center,
+            radius,
+            material,
+        }
     }
 }
 impl Hittable for Sphere {
@@ -34,10 +42,15 @@ impl Hittable for Sphere {
             }
         }
 
-        // pub fn from_ray_outward_normal(p: Point3, t: f64, r: &Ray, outward_normal: Unit<Vec3>) -> Self {
         let rec_p = r.at(root);
         let outward_normal = Unit::new_normalize((rec_p - self.center) / self.radius);
-        let rec = HitRecord::from_ray_outward_normal(rec_p, root, r, outward_normal);
+        let rec = HitRecord::from_ray_outward_normal_material(
+            rec_p,
+            root,
+            r,
+            outward_normal,
+            Rc::clone(&self.material),
+        );
         Some(rec)
     }
 }

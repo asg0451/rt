@@ -1,27 +1,31 @@
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::*;
+
 use nalgebra::Unit;
+use std::rc::Rc;
 
 mod hittable_list;
 mod sphere;
 pub use crate::hittable::hittable_list::HittableList;
 pub use crate::hittable::sphere::Sphere;
 
-#[derive(Debug)]
 pub struct HitRecord {
     p: Point3,
     normal: Unit<Vec3>,
+    material: Rc<dyn Material>,
     t: f64,
     front_face: bool,
 }
 
 // normals are unit, and they point outwards
 impl HitRecord {
-    pub fn from_ray_outward_normal(
+    pub fn from_ray_outward_normal_material(
         p: Point3,
         t: f64,
         r: &Ray,
         mut outward_normal: Unit<Vec3>,
+        material: Rc<dyn Material>,
     ) -> Self {
         let front_face = r.direction().dot(outward_normal.as_mut_unchecked()) < 0.;
         let normal = if front_face {
@@ -35,6 +39,7 @@ impl HitRecord {
             p,
             front_face,
             normal,
+            material,
         }
     }
     pub fn t(&self) -> f64 {
@@ -45,6 +50,9 @@ impl HitRecord {
     }
     pub fn p(&self) -> Point3 {
         self.p
+    }
+    pub fn material(&self) -> Rc<dyn Material> {
+        Rc::clone(&self.material)
     }
 }
 
