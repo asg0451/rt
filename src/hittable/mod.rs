@@ -43,6 +43,9 @@ impl HitRecord {
     pub fn normal(&self) -> Unit<Vec3> {
         self.normal
     }
+    pub fn p(&self) -> Point3 {
+        self.p
+    }
 }
 
 pub trait Hittable {
