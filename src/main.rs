@@ -13,6 +13,8 @@ use vec3::{Color, Point3, Vec3};
 
 use structopt::StructOpt;
 
+use std::sync::Arc;
+
 #[derive(Debug, StructOpt)]
 #[structopt[name = "rt"]]
 struct Opt {
@@ -92,46 +94,53 @@ fn main() {
     let max_depth = 50; // max ray bounces
 
     // world
-    use std::sync::Arc;
 
     let material_ground = Arc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
     let material_center = Arc::new(material::Lambertian::new(Color::new(0.1, 0.2, 0.5)));
     let material_left = Arc::new(material::Dielectric::new(1.5));
     let material_right = Arc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 0.));
 
-    // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
+    let r = (std::f64::consts::PI / 4.).cos();
 
-    let objs: Vec<Arc<dyn Hittable>> = vec![
-        Arc::new(Sphere::new(
+    // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
+    let objs: Vec<Box<dyn Hittable>> = vec![
+        Box::new(Sphere::new(
             Point3::new(0.0, -100.5, -1.0),
             100.0,
             material_ground.clone(),
         )),
-        Arc::new(Sphere::new(
+        Box::new(Sphere::new(
             Point3::new(0.0, 0.0, -1.0),
             0.5,
             material_center.clone(),
         )),
-        Arc::new(Sphere::new(
+        Box::new(Sphere::new(
             Point3::new(-1.0, 0.0, -1.0),
             0.5,
             material_left.clone(),
         )),
-        Arc::new(Sphere::new(
+        Box::new(Sphere::new(
             Point3::new(-1., 0., -1.),
-            -0.4, // negative radius -> surface points inward -> hollow sphere
+            -0.45, // negative radius -> surface points inward -> hollow sphere
             material_left.clone(),
         )),
-        Arc::new(Sphere::new(
+        Box::new(Sphere::new(
             Point3::new(1.0, 0.0, -1.0),
             0.5,
             material_right.clone(),
         )),
     ];
+    let objs: Vec<Arc<dyn Hittable>> = objs.into_iter().map(|o| o.into()).collect::<Vec<_>>();
     let world = HittableList::new(objs);
 
     // camera
-    let camera = Camera::new();
+    let camera = Camera::new(
+        Point3::new(-2., 2., 1.),
+        Point3::new(0., 0., -1.),
+        Vec3::new(0., 1., 0.),
+        20.,
+        aspect_ratio,
+    );
 
     // render
     use rand::prelude::*;
