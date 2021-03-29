@@ -1,0 +1,37 @@
+use crate::hittable::{HitRecord, Hittable};
+use crate::ray::Ray;
+use crate::vec3::*;
+use nalgebra::Unit;
+use std::rc::Rc;
+
+#[derive(Default)]
+pub struct HittableList {
+    objects: Vec<Rc<dyn Hittable>>,
+}
+
+impl HittableList {
+    pub fn new(objects: Vec<Rc<dyn Hittable>>) -> Self {
+        Self { objects }
+    }
+
+    pub fn clear(&mut self) {
+        self.objects.clear()
+    }
+    pub fn add(&mut self, object: Rc<dyn Hittable>) {
+        self.objects.push(object);
+    }
+}
+
+impl Hittable for HittableList {
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+        let mut closest: Option<HitRecord> = None;
+
+        for o in self.objects.iter() {
+            let max = closest.as_ref().map_or(t_max, |hr| hr.t());
+            if let shr @ Some(_) = o.hit(r, t_min, max) {
+                closest = shr;
+            }
+        }
+        closest
+    }
+}
