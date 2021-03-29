@@ -54,6 +54,11 @@ impl HitRecord {
     pub fn material(&self) -> Arc<dyn Material> {
         Arc::clone(&self.material)
     }
+
+    /// Get a reference to the hit record's front face.
+    pub fn front_face(&self) -> bool {
+        self.front_face
+    }
 }
 
 pub trait Hittable: Send + Sync {

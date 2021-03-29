@@ -11,6 +11,17 @@ use hittable::{Hittable, HittableList, Sphere};
 use ray::Ray;
 use vec3::{Color, Point3, Vec3};
 
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt[name = "rt"]]
+struct Opt {
+    #[structopt(short, long, default_value = "400")]
+    width: usize,
+    #[structopt(short, long, default_value = "100")]
+    samples_per_pixel: usize,
+}
+
 // https://plasma-umass.org/coz/
 // https://github.com/plasma-umass/coz/tree/master/rust
 
@@ -47,8 +58,8 @@ fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: usize) -> Color {
         // recurse for diffusion / ray bouncing
         if let Some((scattered, attenuation)) = rec.material().scatter(&r, &rec) {
             let new_color = ray_color(&scattered, world, depth - 1);
-            // should be attenuation * ray_color(&scattered, world, depth - 1);
-            // TODO: why couldn't i just * them? https://docs.rs/nalgebra/0.25.3/nalgebra/base/struct.Matrix.html#method.mul
+            // should be attenuation * ray_color(&scattered, world, depth - 1); where * is elementwise. is there a way to do this in nalg
+            // https://docs.rs/nalgebra/0.25.3/nalgebra/base/struct.Matrix.html#method.mul
             // element-wise multiplication? transpose?
             let multpld = Vec3::new(
                 new_color.x * attenuation.x,
@@ -66,29 +77,31 @@ fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: usize) -> Color {
 
 fn main() {
     // coz doesnt work now that i have rayon...
-    // TODO: make minimal example and submit issue
-
     coz::thread_init();
+
+    let opt = Opt::from_args();
+
     // eye is at 0,0,0; y is up, x is right, z is into the screen
     // traverse the screen from upper left, use 2 offset vercors along the sides to move the ray endpoint across the screen
 
     // image
     let aspect_ratio = 16.0 / 9.0;
-    let image_width = 400; // 3840
+    let image_width = opt.width; // 3840
     let image_height = (image_width as f64 / aspect_ratio) as i64;
-    let samples_per_pixel = 100; // 200
+    let samples_per_pixel = opt.samples_per_pixel;
     let max_depth = 50; // max ray bounces
 
     // world
     use std::sync::Arc;
 
     let material_ground = Arc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
-    let material_center = Arc::new(material::Lambertian::new(Color::new(0.7, 0.3, 0.3)));
-    let material_left = Arc::new(material::Metal::new(Color::new(0.8, 0.8, 0.8), 0.3));
-    let material_right = Arc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 1.));
+    let material_center = Arc::new(material::Lambertian::new(Color::new(0.1, 0.2, 0.5)));
+    let material_left = Arc::new(material::Dielectric::new(1.5));
+    let material_right = Arc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 0.));
 
     // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
-    let world = HittableList::new(vec![
+
+    let objs: Vec<Arc<dyn Hittable>> = vec![
         Arc::new(Sphere::new(
             Point3::new(0.0, -100.5, -1.0),
             100.0,
@@ -105,11 +118,17 @@ fn main() {
             material_left.clone(),
         )),
         Arc::new(Sphere::new(
+            Point3::new(-1., 0., -1.),
+            -0.4, // negative radius -> surface points inward -> hollow sphere
+            material_left.clone(),
+        )),
+        Arc::new(Sphere::new(
             Point3::new(1.0, 0.0, -1.0),
             0.5,
             material_right.clone(),
         )),
-    ]);
+    ];
+    let world = HittableList::new(objs);
 
     // camera
     let camera = Camera::new();
@@ -149,13 +168,13 @@ fn main() {
     let ctr = std::sync::atomic::AtomicUsize::new(0);
 
     lines.par_iter().for_each_with(tx, |tx, &j| {
+        coz::scope!("scanline");
         let mut buf = Vec::with_capacity(16);
         let mut rng = rand::thread_rng();
         if j % 50 == 0 {
             let count = ctr.fetch_add(50, std::sync::atomic::Ordering::Relaxed);
             eprint!("\rscanlines remaining: {}", image_height as usize - count);
         }
-        coz::begin!("scanline");
         for i in 0..image_width {
             let mut color = Color::new(0., 0., 0.);
             for _ in 0..samples_per_pixel {
@@ -167,7 +186,6 @@ fn main() {
             write_color(&mut buf, &color, samples_per_pixel);
         }
         tx.send((j, buf)).expect("failed to send line");
-        coz::end!("scanline");
     });
 
     reader_thread.join().expect("Failed to join reader thread");

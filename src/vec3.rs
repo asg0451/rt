@@ -44,3 +44,10 @@ pub fn near_zero(v: &Vec3) -> bool {
 pub fn reflect(v: &Vec3, normal: &Unit<Vec3>) -> Vec3 {
     v - 2. * v.dot(&normal) * normal.as_ref()
 }
+
+pub fn refract(uv: &Vec3, normal: &Unit<Vec3>, eta_ratio: f64) -> Vec3 {
+    let cos_theta: f64 = (-uv.dot(normal)).min(1.);
+    let r_out_perp = eta_ratio * (uv + normal.as_ref() * cos_theta);
+    let r_out_parallel = -(1.0 - r_out_perp.magnitude_squared()).abs().sqrt() * normal.as_ref();
+    r_out_perp + r_out_parallel
+}
