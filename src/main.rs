@@ -134,12 +134,20 @@ fn main() {
     let world = HittableList::new(objs);
 
     // camera
+    // depth of field
+    let lookfrom = Point3::new(3., 3., 2.);
+    let lookat = Point3::new(0., 0., -1.);
+    let vup = Vec3::new(0., 1., 0.);
+    let dist_to_focus = (lookfrom - lookat).magnitude();
+    let aperture = 2.;
     let camera = Camera::new(
-        Point3::new(-2., 2., 1.),
-        Point3::new(0., 0., -1.),
-        Vec3::new(0., 1., 0.),
+        lookfrom,
+        lookat,
+        vup,
         20.,
         aspect_ratio,
+        aperture,
+        dist_to_focus,
     );
 
     // render
