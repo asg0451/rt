@@ -3,47 +3,35 @@
 mod camera;
 mod hittable;
 mod material;
+mod output;
 mod random_scene;
 mod ray;
 mod vec3;
+
+use std::sync::mpsc::{channel, Sender};
 
 use camera::Camera;
 use ray::Ray;
 use vec3::{Color, Point3, Vec3};
 
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::prelude::*;
+use rayon::prelude::*;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt[name = "rt"]]
 struct Opt {
     #[structopt(short, long, default_value = "1200")] // 1200
-    width: usize,
+    width: u32,
     #[structopt(short, long, default_value = "500")] // 500
-    samples_per_pixel: usize,
+    samples_per_pixel: u32,
+    #[structopt(short, long)]
+    no_use_rayon: bool,
 }
 
 // https://plasma-umass.org/coz/
 // https://github.com/plasma-umass/coz/tree/master/rust
-
-fn write_color<W: std::io::Write>(w: &mut W, c: &Color, samples_per_pixel: usize) {
-    let mut r = c.x;
-    let mut g = c.y;
-    let mut b = c.z;
-
-    // divide color by numver of samples and gamma-correct for gamma=2.0
-    let scale = 1. / samples_per_pixel as f64;
-    r = (scale * r).sqrt();
-    g = (scale * g).sqrt();
-    b = (scale * b).sqrt();
-
-    let r = (256. * r.clamp(0., 0.999)) as u64;
-    let g = (256. * g.clamp(0., 0.999)) as u64;
-    let b = (256. * b.clamp(0., 0.999)) as u64;
-
-    w.write_all(format!("{} {} {}\n", r, g, b).as_bytes())
-        .expect("error printing color");
-    // println!("{} {} {}", ir, ig, ib);
-}
 
 // for testing; pretty gradient
 // linearly blends white and blue depending on height of y coord after scaling the ray to unit
@@ -87,7 +75,7 @@ fn main() {
     // image
     let aspect_ratio = 16.0 / 9.0;
     let image_width = opt.width; // 3840
-    let image_height = (image_width as f64 / aspect_ratio) as i64;
+    let image_height = (image_width as f64 / aspect_ratio) as u32;
     let samples_per_pixel = opt.samples_per_pixel;
     let max_depth = 50; // max ray bounces
 
@@ -112,48 +100,25 @@ fn main() {
     );
 
     // render
-    use rand::prelude::*;
-
-    print!("P3\n{} {}\n255\n", image_width, image_height);
-    let lines = (0..=(image_height - 1)).rev().collect::<Vec<_>>();
-    use rayon::prelude::*;
-
-    let (tx, rx) = std::sync::mpsc::channel::<(i64, Vec<u8>)>();
-
+    let (mut tx, rx) = channel::<(u32, u32, Color)>(); // is this usage of channel too expensive?
     let reader_thread = std::thread::spawn(move || {
-        let mut buf: Box<Vec<_>> = Box::new(Vec::with_capacity(
-            image_width as usize * image_height as usize * 10,
-        ));
-        loop {
-            coz::scope!("reading channel");
-            if let Ok(res) = rx.recv() {
-                buf.push(res);
-            } else {
-                break;
-            }
+        let mut buf =
+            output::ImageOutput::new(image_width, image_height, samples_per_pixel, "out.png");
+        while let Ok((x, y, color)) = rx.recv() {
+            buf.put_pixel_color(x, y, color);
         }
-        buf.sort_unstable_by_key(|&(idx, _)| -idx);
-        coz::begin!("flushing channel");
-        for (_i, l) in buf.into_iter() {
-            print!(
-                "{}",
-                std::str::from_utf8(&l).expect("failed to restringify")
-            );
-        }
-        coz::end!("flushing channel");
+        buf.save().expect("failed to save image");
     });
 
-    let ctr = std::sync::atomic::AtomicUsize::new(0);
+    let bar = ProgressBar::new(image_height.into()).with_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-"),
+    );
 
-    // lines.par_iter().for_each_with(tx, |tx, &j| {
-    lines.iter().for_each(|&j| {
+    let render_line = |tx: &mut Sender<(u32, u32, Color)>, &j| {
         coz::scope!("scanline");
-        let mut buf = Vec::with_capacity(16);
         let mut rng = rand::thread_rng();
-        if j % 50 == 0 {
-            let count = ctr.fetch_add(50, std::sync::atomic::Ordering::Relaxed);
-            eprint!("\rscanlines remaining: {}", image_height as usize - count);
-        }
         for i in 0..image_width {
             let mut color = Color::new(0., 0., 0.);
             for _ in 0..samples_per_pixel {
@@ -162,11 +127,23 @@ fn main() {
                 let r = camera.get_ray(u, v);
                 color += ray_color(&r, &world, max_depth);
             }
-            write_color(&mut buf, &color, samples_per_pixel);
+            // image was upside down for some reason..
+            tx.send((i, image_height - j - 1, color)).unwrap();
         }
-        tx.send((j, buf)).expect("failed to send line");
-    });
+        bar.inc(1);
+    };
 
-    reader_thread.join().expect("Failed to join reader thread");
+    let lines = (0..=(image_height - 1)).collect::<Vec<_>>();
+    if opt.no_use_rayon {
+        eprintln!("running sans rayon");
+        lines.iter().for_each(|j| render_line(&mut tx, j));
+    } else {
+        lines.par_iter().for_each_with(tx.clone(), render_line);
+    }
+
+    bar.finish();
+    drop(tx);
+
+    reader_thread.join().expect("failed to join reader thread");
     eprintln!("\ndone");
 }

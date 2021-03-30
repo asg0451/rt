@@ -26,15 +26,6 @@ pub fn random_unit() -> Unit<Vec3> {
     Unit::new_normalize(random_in_unit_sphere())
 }
 
-pub fn random_in_hemisphere(normal: &Unit<Vec3>) -> Vec3 {
-    let in_unit_sphere = random_in_unit_sphere();
-    if in_unit_sphere.dot(normal) > 0. {
-        in_unit_sphere
-    } else {
-        -in_unit_sphere
-    }
-}
-
 pub fn random_in_unit_disk() -> Vec3 {
     use rand::prelude::*;
     let mut rng = rand::thread_rng();

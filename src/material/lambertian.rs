@@ -1,7 +1,7 @@
 use crate::hittable::HitRecord;
 use crate::material::Material;
 use crate::ray::Ray;
-use crate::vec3::{Color, Unit};
+use crate::vec3::{Color};
 
 pub struct Lambertian {
     albedo: Color,
@@ -23,6 +23,6 @@ impl Material for Lambertian {
             scatter_direction = rec.normal().clone().into_inner();
         }
 
-        Some((Ray::new(rec.p(), scatter_direction), self.albedo.clone()))
+        Some((Ray::new(rec.p(), scatter_direction), self.albedo))
     }
 }

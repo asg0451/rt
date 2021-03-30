@@ -1,6 +1,6 @@
 use crate::hittable::{Hittable, HittableList, Sphere};
 use crate::material;
-use crate::vec3::{Color, Point3, Vec3};
+use crate::vec3::{Color, Point3};
 use rand::prelude::*;
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ pub fn random_scene() -> HittableList {
     let mut world = HittableList::new(vec![Arc::new(Sphere::new(
         Point3::new(0., -1000., 0.),
         1000.,
-        material_ground.clone(),
+        material_ground,
     ))]);
 
     let mut rng = rand::thread_rng();
@@ -23,7 +23,7 @@ pub fn random_scene() -> HittableList {
             );
 
             if (center - Point3::new(4., 0.2, 0.)).magnitude() > 0.9 {
-                let (sphere_material, obj): (Arc<dyn material::Material>, Arc<dyn Hittable>) =
+                let (_sphere_material, obj): (Arc<dyn material::Material>, Arc<dyn Hittable>) =
                     if choose_mat < 0.8 {
                         // diffuse
                         let albedo = crate::vec3::mul_elemwise(
@@ -55,23 +55,11 @@ pub fn random_scene() -> HittableList {
     let m2 = Arc::new(material::Lambertian::new(Color::new(0.4, 0.2, 0.1)));
     let m3 = Arc::new(material::Metal::new(Color::new(0.7, 0.6, 0.5), 0.));
 
-    world.add(Arc::new(Sphere::new(
-        Point3::new(0., 1., 0.),
-        1.,
-        m1.clone(),
-    )));
+    world.add(Arc::new(Sphere::new(Point3::new(0., 1., 0.), 1., m1)));
 
-    world.add(Arc::new(Sphere::new(
-        Point3::new(-4., 1., 0.),
-        1.,
-        m2.clone(),
-    )));
+    world.add(Arc::new(Sphere::new(Point3::new(-4., 1., 0.), 1., m2)));
 
-    world.add(Arc::new(Sphere::new(
-        Point3::new(0.7, 0.6, 0.5),
-        1.,
-        m3.clone(),
-    )));
+    world.add(Arc::new(Sphere::new(Point3::new(0.7, 0.6, 0.5), 1., m3)));
 
     world
 }

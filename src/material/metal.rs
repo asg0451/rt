@@ -22,7 +22,7 @@ impl Material for Metal {
             reflected + self.fuzz * crate::vec3::random_in_unit_sphere(),
         );
         if scattered.direction().dot(&rec.normal()) > 0. {
-            Some((scattered, self.albedo.clone()))
+            Some((scattered, self.albedo))
         } else {
             None
         }

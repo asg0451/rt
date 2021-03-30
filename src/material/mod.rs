@@ -1,6 +1,6 @@
 use crate::hittable::HitRecord;
 use crate::ray::Ray;
-use crate::vec3::{Color, Unit};
+use crate::vec3::{Color};
 
 mod dielectric;
 mod lambertian;

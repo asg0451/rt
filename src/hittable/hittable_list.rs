@@ -1,7 +1,6 @@
 use crate::hittable::{HitRecord, Hittable};
 use crate::ray::Ray;
-use crate::vec3::*;
-use nalgebra::Unit;
+
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -14,9 +13,6 @@ impl HittableList {
         Self { objects }
     }
 
-    pub fn clear(&mut self) {
-        self.objects.clear()
-    }
     pub fn add(&mut self, object: Arc<dyn Hittable>) {
         self.objects.push(object);
     }
