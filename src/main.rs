@@ -3,24 +3,22 @@
 mod camera;
 mod hittable;
 mod material;
+mod random_scene;
 mod ray;
 mod vec3;
 
 use camera::Camera;
-use hittable::{Hittable, HittableList, Sphere};
 use ray::Ray;
 use vec3::{Color, Point3, Vec3};
 
 use structopt::StructOpt;
 
-use std::sync::Arc;
-
 #[derive(Debug, StructOpt)]
 #[structopt[name = "rt"]]
 struct Opt {
-    #[structopt(short, long, default_value = "400")]
+    #[structopt(short, long, default_value = "1200")] // 1200
     width: usize,
-    #[structopt(short, long, default_value = "100")]
+    #[structopt(short, long, default_value = "500")] // 500
     samples_per_pixel: usize,
 }
 
@@ -49,7 +47,7 @@ fn write_color<W: std::io::Write>(w: &mut W, c: &Color, samples_per_pixel: usize
 
 // for testing; pretty gradient
 // linearly blends white and blue depending on height of y coord after scaling the ray to unit
-fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: usize) -> Color {
+fn ray_color(r: &Ray, world: &impl hittable::Hittable, depth: i64) -> Color {
     use nalgebra::Unit;
 
     if depth <= 0 {
@@ -94,52 +92,15 @@ fn main() {
     let max_depth = 50; // max ray bounces
 
     // world
-
-    let material_ground = Arc::new(material::Lambertian::new(Color::new(0.8, 0.8, 0.)));
-    let material_center = Arc::new(material::Lambertian::new(Color::new(0.1, 0.2, 0.5)));
-    let material_left = Arc::new(material::Dielectric::new(1.5));
-    let material_right = Arc::new(material::Metal::new(Color::new(0.8, 0.6, 0.2), 0.));
-
-    let r = (std::f64::consts::PI / 4.).cos();
-
-    // https://stackoverflow.com/questions/63893847/error-when-passing-rcdyn-trait-as-a-function-argument
-    let objs: Vec<Box<dyn Hittable>> = vec![
-        Box::new(Sphere::new(
-            Point3::new(0.0, -100.5, -1.0),
-            100.0,
-            material_ground.clone(),
-        )),
-        Box::new(Sphere::new(
-            Point3::new(0.0, 0.0, -1.0),
-            0.5,
-            material_center.clone(),
-        )),
-        Box::new(Sphere::new(
-            Point3::new(-1.0, 0.0, -1.0),
-            0.5,
-            material_left.clone(),
-        )),
-        Box::new(Sphere::new(
-            Point3::new(-1., 0., -1.),
-            -0.45, // negative radius -> surface points inward -> hollow sphere
-            material_left.clone(),
-        )),
-        Box::new(Sphere::new(
-            Point3::new(1.0, 0.0, -1.0),
-            0.5,
-            material_right.clone(),
-        )),
-    ];
-    let objs: Vec<Arc<dyn Hittable>> = objs.into_iter().map(|o| o.into()).collect::<Vec<_>>();
-    let world = HittableList::new(objs);
+    let world = random_scene::random_scene();
 
     // camera
-    // depth of field
-    let lookfrom = Point3::new(3., 3., 2.);
-    let lookat = Point3::new(0., 0., -1.);
+    // depth of fieldx
+    let lookfrom = Point3::new(13., 2., 3.);
+    let lookat = Point3::new(0., 0., 0.);
     let vup = Vec3::new(0., 1., 0.);
-    let dist_to_focus = (lookfrom - lookat).magnitude();
-    let aperture = 2.;
+    let dist_to_focus = 10.;
+    let aperture = 0.1;
     let camera = Camera::new(
         lookfrom,
         lookat,
@@ -165,7 +126,7 @@ fn main() {
         ));
         loop {
             coz::scope!("reading channel");
-            if let Some(res) = rx.recv().ok() {
+            if let Ok(res) = rx.recv() {
                 buf.push(res);
             } else {
                 break;
@@ -184,7 +145,8 @@ fn main() {
 
     let ctr = std::sync::atomic::AtomicUsize::new(0);
 
-    lines.par_iter().for_each_with(tx, |tx, &j| {
+    // lines.par_iter().for_each_with(tx, |tx, &j| {
+    lines.iter().for_each(|&j| {
         coz::scope!("scanline");
         let mut buf = Vec::with_capacity(16);
         let mut rng = rand::thread_rng();
