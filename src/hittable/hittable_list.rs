@@ -1,6 +1,7 @@
-use crate::hittable::{HitRecord, Hittable};
+use crate::hittable::{aabb::Aabb, HitRecord, Hittable};
 use crate::ray::Ray;
 
+use std::convert::AsRef;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -16,6 +17,16 @@ impl HittableList {
     pub fn add(&mut self, object: Arc<dyn Hittable>) {
         self.objects.push(object);
     }
+
+    pub fn into_inner(self) -> Vec<Arc<dyn Hittable>> {
+        self.objects
+    }
+}
+
+impl AsRef<[Arc<dyn Hittable>]> for HittableList {
+    fn as_ref(&self) -> &[Arc<dyn Hittable>] {
+        &self.objects
+    }
 }
 
 impl Hittable for HittableList {
@@ -29,5 +40,25 @@ impl Hittable for HittableList {
             }
         }
         closest
+    }
+
+    fn bounding_box(&self) -> Option<Aabb> {
+        if self.objects.is_empty() {
+            return None;
+        }
+
+        let mut temp: Option<Aabb> = None;
+        for o in self.objects.iter() {
+            if let Some(bb) = o.bounding_box() {
+                temp = Some(if let Some(temp) = temp {
+                    temp.surrounding_box(&bb)
+                } else {
+                    bb
+                });
+            } else {
+                return None;
+            }
+        }
+        temp
     }
 }

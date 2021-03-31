@@ -6,6 +6,7 @@ mod material;
 mod output;
 mod random_scene;
 mod ray;
+mod texture;
 mod vec3;
 
 use std::sync::mpsc::{channel, Sender};

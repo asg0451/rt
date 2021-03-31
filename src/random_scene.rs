@@ -1,16 +1,24 @@
 use crate::hittable::{Hittable, HittableList, Sphere};
 use crate::material;
+use crate::texture;
 use crate::vec3::{Color, Point3};
 use rand::prelude::*;
 use std::sync::Arc;
 
 pub fn random_scene() -> HittableList {
-    let material_ground = Arc::new(material::Lambertian::new(Color::new(0.5, 0.5, 0.5)));
-    let mut world = HittableList::new(vec![Arc::new(Sphere::new(
+    let mut world = HittableList::new(vec![]);
+
+    let checker = Arc::new(texture::Checker::from_colors(
+        Color::new(0.2, 0.3, 0.1),
+        Color::new(0.9, 0.9, 0.9),
+    ));
+
+    // let material_ground = Arc::new(material::Lambertian::new(Color::new(0.5, 0.5, 0.5)));
+    world.add(Arc::new(Sphere::new(
         Point3::new(0., -1000., 0.),
         1000.,
-        material_ground,
-    ))]);
+        Arc::new(material::Lambertian::new(checker)),
+    )));
 
     let mut rng = rand::thread_rng();
     for a in -11..11 {
@@ -30,7 +38,7 @@ pub fn random_scene() -> HittableList {
                             &crate::vec3::random_in_unit_sphere(),
                             &crate::vec3::random_in_unit_sphere(),
                         );
-                        let mat = Arc::new(material::Lambertian::new(albedo));
+                        let mat = Arc::new(material::Lambertian::from_color(albedo));
                         let sph = Arc::new(Sphere::new(center, 0.2, mat.clone()));
                         (mat, sph)
                     } else if choose_mat < 0.95 {
@@ -52,7 +60,7 @@ pub fn random_scene() -> HittableList {
     }
 
     let m1 = Arc::new(material::Dielectric::new(1.5));
-    let m2 = Arc::new(material::Lambertian::new(Color::new(0.4, 0.2, 0.1)));
+    let m2 = Arc::new(material::Lambertian::from_color(Color::new(0.4, 0.2, 0.1)));
     let m3 = Arc::new(material::Metal::new(Color::new(0.7, 0.6, 0.5), 0.));
 
     world.add(Arc::new(Sphere::new(Point3::new(0., 1., 0.), 1., m1)));

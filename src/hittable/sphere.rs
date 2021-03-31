@@ -1,4 +1,4 @@
-use crate::hittable::{HitRecord, Hittable};
+use crate::hittable::{aabb::Aabb, HitRecord, Hittable};
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::*;
@@ -19,6 +19,17 @@ impl Sphere {
             radius,
             material,
         }
+    }
+
+    // p = point on sphere of radius 1, centered at origin
+    // v,u in [0,1]
+    fn uv(p: &Point3) -> (f64, f64) {
+        let theta = (-p.y).acos();
+        let phi = (-p.z).atan2(p.x) + std::f64::consts::PI;
+        let u = phi / (2. * std::f64::consts::PI);
+        let v = theta / std::f64::consts::PI;
+
+        (u, v)
     }
 }
 impl Hittable for Sphere {
@@ -44,13 +55,23 @@ impl Hittable for Sphere {
 
         let rec_p = r.at(root);
         let outward_normal = Unit::new_normalize((rec_p - self.center) / self.radius);
+        let (u, v) = Sphere::uv(&outward_normal);
         let rec = HitRecord::from_ray_outward_normal_material(
             rec_p,
             root,
             r,
             outward_normal,
+            u,
+            v,
             Arc::clone(&self.material),
         );
         Some(rec)
+    }
+
+    fn bounding_box(&self) -> Option<Aabb> {
+        Some(Aabb::new(
+            self.center - Vec3::new(self.radius, self.radius, self.radius),
+            self.center + Vec3::new(self.radius, self.radius, self.radius),
+        ))
     }
 }
