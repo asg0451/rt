@@ -5,6 +5,28 @@ use crate::vec3::{Color, Point3};
 use rand::prelude::*;
 use std::sync::Arc;
 
+pub fn two_spheres() -> HittableList {
+    let mut world = HittableList::new(vec![]);
+
+    let checker = Arc::new(material::Lambertian::new(Arc::new(
+        texture::Checker::from_colors(Color::new(0.2, 0.3, 0.1), Color::new(0.9, 0.9, 0.9)),
+    )));
+
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0., -10., 0.),
+        10.,
+        checker.clone(),
+    )));
+
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0., 10., 0.),
+        10.,
+        checker.clone(),
+    )));
+
+    world
+}
+
 pub fn random_scene() -> HittableList {
     let mut world = HittableList::new(vec![]);
 

@@ -29,6 +29,8 @@ struct Opt {
     samples_per_pixel: u32,
     #[structopt(short, long)]
     no_use_rayon: bool,
+    #[structopt(long, default_value = "rand")]
+    scene: String,
 }
 
 // https://plasma-umass.org/coz/
@@ -81,7 +83,11 @@ fn main() {
     let max_depth = 50; // max ray bounces
 
     // world
-    let world = random_scene::random_scene();
+    let world = match &opt.scene[..] {
+        "rand" => random_scene::random_scene(),
+        "2spheres" => random_scene::two_spheres(),
+        _ => panic!("unknown scene: {}", opt.scene),
+    };
 
     // camera
     // depth of fieldx
